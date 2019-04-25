@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import (UserProductReviewAfterSpam, AuthUser)
+from .models import (UserProductReviewAfterSpam, AuthUser, JsonFileUpload)
 
 
 class DynamicFieldsModelSerializer(serializers.ModelSerializer):
@@ -55,8 +55,8 @@ class AuthUserSerializer(serializers.ModelSerializer):
         # fields = [f.name for f in model._meta.fields]
         exclude = ['password', 'is_staff', 'groups', 'user_permissions']
 
-class FileUploadSerializer(serializers.Serializer):
-    file_upload = serializers.FileField()
 
+class JsonFileUploadSerializer(DynamicFieldsModelSerializer):
     class Meta:
-        fields = '__all__'
+        model = JsonFileUpload
+        fields = [f.name for f in model._meta.fields]
