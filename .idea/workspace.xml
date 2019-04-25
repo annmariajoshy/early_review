@@ -1,15 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="8690fda1-999a-4b31-a386-73e654771520" name="Default" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
-      <change beforePath="$PROJECT_DIR$/early_review/admin.py" afterPath="$PROJECT_DIR$/early_review/admin.py" />
-      <change beforePath="$PROJECT_DIR$/early_review/models.py" afterPath="$PROJECT_DIR$/early_review/models.py" />
-      <change beforePath="$PROJECT_DIR$/early_review/serializers.py" afterPath="$PROJECT_DIR$/early_review/serializers.py" />
-      <change beforePath="$PROJECT_DIR$/early_review/urls.py" afterPath="$PROJECT_DIR$/early_review/urls.py" />
-      <change beforePath="$PROJECT_DIR$/early_review/views.py" afterPath="$PROJECT_DIR$/early_review/views.py" />
-      <change beforePath="$PROJECT_DIR$/early_review_backend/settings.py" afterPath="$PROJECT_DIR$/early_review_backend/settings.py" />
-    </list>
+    <list default="true" id="8690fda1-999a-4b31-a386-73e654771520" name="Default" comment="" />
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="TRACKING_ENABLED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
