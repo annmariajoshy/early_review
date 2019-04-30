@@ -274,6 +274,161 @@ class AuthUserModelViewSet(viewsets.ModelViewSet):
         return super(AuthUserModelViewSet, self).list(request)
 
 
+# class FileUploadViewSet(viewsets.ModelViewSet):
+#     serializer_class = JsonFileUploadSerializer
+#     queryset = JsonFileUpload.objects.all()
+#
+#     # def list(self, request):
+#     #     return Response("list")
+#     @transaction.atomic
+#     def create(self, request):
+#         try:
+#             df = pd.read_json(request.data['file_upload'], lines=True)
+#             lst = []
+#             for row, value in df.iterrows():
+#                 user_id = value.reviewerID
+#                 user_name = value.reviewerName
+#                 review = value.reviewText
+#
+#                 # product_id = request.GET.get('product_id', None)
+#                 # if not product_id:
+#                 #     return Response(['Please Send product_id as query string.'])
+#                 # try:
+#                 #     product_review = UserProductReviewAfterSpam.objects.filter(product_id=product_id)
+#                 #     first_date = product_review.order_by('date_review').first().date_review
+#                 #     last_date = product_review.order_by('date_review').last().date_review
+#                 #     difference = (last_date - first_date) / 3
+#                 #     second_date = first_date + datetime.timedelta(days=difference.days)
+#                 #     output_data = UserProductReviewAfterSpam.objects.filter(date_review__gte=first_date,
+#                 #                                                             date_review__lte=second_date)
+#                 # except UserProductReviewAfterSpam.DoesNotExist:
+#                 #     return Response(['Please send valid new product_id.'])
+#
+#                 def extract_features(word_list):
+#                     return dict([(word, True) for word in word_list])
+#
+#                 def sentimental_output(review_text):
+#                     positive_fileids = movie_reviews.fileids('pos')
+#                     negative_fileids = movie_reviews.fileids('neg')
+#                     # for f in positive_fileids:
+#                     #     # print(">>>>>", f)
+#                     #     print(extract_features(movie_reviews.words(fileids=[f])))
+#
+#                     features_positive = [(extract_features(movie_reviews.words(fileids=[f])), 'Positive')
+#                                          for f in positive_fileids]
+#                     # print("POSITIVE", features_positive)
+#                     features_negative = [(extract_features(movie_reviews.words(fileids=[f])), 'Negative')
+#                                          for f in negative_fileids]
+#                     threshold_factor = 0.8
+#                     # print("lelen", features_positive)
+#                     threshold_positive = int(threshold_factor * len(features_positive))
+#                     threshold_negative = int(threshold_factor * len(features_negative))
+#                     features_train = features_positive[:threshold_positive] + features_negative[:threshold_negative]
+#                     features_test = features_positive[threshold_positive:] + features_negative[threshold_negative:]
+#
+#                     classifier = NaiveBayesClassifier.train(features_train)
+#                     # print("CLASSIDFOE", list(classifier))
+#
+#                     # for f in review_text.split():
+#                     #     print("SPLIT", classifier.prob_classify(extract_features(f)))
+#                     probdist = classifier.prob_classify(extract_features(review_text.split()))
+#                     # print("IIII", probdist)
+#                     pred_sentiment = probdist.max()
+#                     # print("MAX", pred_sentiment)
+#
+#                     user = UserThreshold.objects.filter(reviewer_id=user_id)
+#                     print("SSSS", user)
+#                     if not user:
+#                         # print("hello")
+#                         if pred_sentiment == "Positive":
+#                             print("hello3")
+#                             user = UserThreshold.objects.create(reviewer_id=user_id, reviewer_name=user_name, sentiment_threshold=1)
+#                             print("hello4")
+#                             user.save()
+#                             print("hello5")
+#                         else:
+#                             user = UserThreshold.objects.create(reviewer_id=user_id, reviewer_name=user_name, sentiment_threshold=0)
+#                             user.save()
+#                     else:
+#                         print("elseeeeeeeee")
+#                         sentimental = UserThreshold.objects.filter(reviewer_id=user_id).last()
+#                         print("hello1",sentimental)
+#                         if pred_sentiment == "Positive":
+#                             print("elseeeeeeeee1")
+#                             avg = (sentimental.sentiment_threshold + 1)/2
+#                             sentimental.sentiment_threshold = avg
+#                             print("SAVE")
+#                             sentimental.save()
+#                         else:
+#                             print("elseeeeeeeee2")
+#                             avg = sentimental.sentiment_threshold / 2
+#                             sentimental.sentiment_threshold = avg
+#                             print("B$ SAVE")
+#                             sentimental.save()
+#
+#
+#
+#                     # lst_data = []
+#                     # dct_data = {}
+#                     # dct_data['reviewer_id'] = user_id
+#                     # dct_data['reviewer_name'] = user_name
+#                     # dct_data['review_text'] = review_text
+#                     # dct_data['Predicted Sentiment'] = pred_sentiment
+#                     # dct_data['Probability'] = round(probdist.prob(pred_sentiment), 2)
+#                     # lst_data.append(dct_data)
+#
+#
+#                     # return lst_data
+#                     # return ("success")
+#
+#
+#                 # lst.extend(sentimental_output(review))
+#                 sentimental_output(review)
+#             print("hello66")
+#             return Response("success")
+#
+#
+#
+#
+#
+#             # df.columns = list(map(lambda x: x.strip().replace(' ', '_'), df.columns))
+#             # df['waiver'] = df['waiver'].astype(float)
+#             # df['waiver'] = df['waiver'].fillna(0)
+#             # df = df.fillna('')
+#             # df[['container_number', 'lease_yard']] = df[['container_number', 'lease_yard']].astype(str)
+#             # df['off_hire_date'] = pd.to_datetime(df['off_hire_date'])
+#             # df[['container_number', 'lease_yard']] = df[['container_number', 'lease_yard']].apply(
+#             #     lambda x: x.str.strip().str.upper())
+#             # lst_data = []
+#             # for row, value in df.iterrows():
+#             #     dct_data = {}
+#             #     try:
+#             #         container = Container.objects.get(number__iexact=value.container_number)
+#             #     except:
+#             #         continue
+#             #     dct_data['container_number_id'] = container.id
+#             #     dct_data['container_number'] = container.number
+#             #     dct_data['container_type_id'] = container.container_type.id
+#             #     dct_data['container_type'] = container.container_type.name
+#             #     dct_data['line_id'] = container.line.id if container.line else None
+#             #     dct_data['line'] = container.line.code if container.line else ''
+#             #     dct_data['location_id'] = container.move_history.last().location.id if container.move_history else None
+#             #     dct_data['location'] = container.move_history.last().location.code if container.move_history else ''
+#             #     dct_data['off_hire_date'] = value.off_hire_date
+#             #     try:
+#             #         yard = Yard.objects.get(code__iexact=value.lease_yard)
+#             #     except:
+#             #         continue
+#             #     dct_data['yard_id'] = yard.pk
+#             #     dct_data['yard'] = value.lease_yard
+#             #     dct_data['waiver'] = value.waiver
+#             #     lst_data.append(dct_data)
+#         except:
+#             return Response(['Please upload proper file'])
+#         else:
+#             return Response("success")
+
+
 class FileUploadViewSet(viewsets.ModelViewSet):
     serializer_class = JsonFileUploadSerializer
     queryset = JsonFileUpload.objects.all()
@@ -282,148 +437,139 @@ class FileUploadViewSet(viewsets.ModelViewSet):
     #     return Response("list")
     @transaction.atomic
     def create(self, request):
+        def extract_features(word_list):
+            return dict([(word, True) for word in word_list])
+
+        def sentimental_output(review_text):
+            print ("start")
+            positive_fileids = movie_reviews.fileids('pos')
+            negative_fileids = movie_reviews.fileids('neg')
+            # for f in positive_fileids:
+            #     # print(">>>>>", f)
+            #     print(extract_features(movie_reviews.words(fileids=[f])))
+
+            features_positive = [(extract_features(movie_reviews.words(fileids=[f])), 'Positive')
+                                 for f in positive_fileids]
+            # print("POSITIVE", features_positive)
+            features_negative = [(extract_features(movie_reviews.words(fileids=[f])), 'Negative')
+                                 for f in negative_fileids]
+            threshold_factor = 0.8
+            # print("lelen", features_positive)
+            threshold_positive = int(threshold_factor * len(features_positive))
+            threshold_negative = int(threshold_factor * len(features_negative))
+            features_train = features_positive[:threshold_positive] + features_negative[:threshold_negative]
+            features_test = features_positive[threshold_positive:] + features_negative[threshold_negative:]
+
+            classifier = NaiveBayesClassifier.train(features_train)
+            # print("CLASSIDFOE", list(classifier))
+
+            # for f in review_text.split():
+            #     print("SPLIT", classifiafter_spamer.prob_classify(extract_features(f)))
+            probdist = classifier.prob_classify(extract_features(review_text.split()))
+            print("IIII", probdist)
+            pred_sentiment = probdist.max()
+            print("MAX", pred_sentiment)
+            return  pred_sentiment
+
         try:
             df = pd.read_json(request.data['file_upload'], lines=True)
             lst = []
+            count = 0
+            print("enter")
             for row, value in df.iterrows():
+                print("uploaded")
                 user_id = value.reviewerID
+                print ("1")
                 user_name = value.reviewerName
+                print ("2")
                 review = value.reviewText
+                print ("3")
+                product_id = value.asin
+                print ("4")
+                # product_name = value.productName
+                print ("5")
+                overall_rating = value.overall
+                print ("6")
+                summary_product = value.summary
+                print ("7")
+                timestamp = value.unixReviewTime
+                print ("8")
+                date_review = value.reviewTime
+                print ("9")
 
-                # product_id = request.GET.get('product_id', None)
-                # if not product_id:
-                #     return Response(['Please Send product_id as query string.'])
-                # try:
-                #     product_review = UserProductReviewAfterSpam.objects.filter(product_id=product_id)
-                #     first_date = product_review.order_by('date_review').first().date_review
-                #     last_date = product_review.order_by('date_review').last().date_review
-                #     difference = (last_date - first_date) / 3
-                #     second_date = first_date + datetime.timedelta(days=difference.days)
-                #     output_data = UserProductReviewAfterSpam.objects.filter(date_review__gte=first_date,
-                #                                                             date_review__lte=second_date)
-                # except UserProductReviewAfterSpam.DoesNotExist:
-                #     return Response(['Please send valid new product_id.'])
 
-                def extract_features(word_list):
-                    return dict([(word, True) for word in word_list])
 
-                def sentimental_output(review_text):
-                    positive_fileids = movie_reviews.fileids('pos')
-                    negative_fileids = movie_reviews.fileids('neg')
-                    # for f in positive_fileids:
-                    #     # print(">>>>>", f)
-                    #     print(extract_features(movie_reviews.words(fileids=[f])))
+                user = UserThreshold.objects.filter(reviewer_id=user_id)
+                print("SSSS", user)
+                if user:
+                    print("sentimental")
+                    output=sentimental_output(review)
+                    print ("output", output)
+                    sentimental = UserThreshold.objects.filter(reviewer_id=user_id).last()
+                    print("hello1", sentimental)
+                    if output == "Positive":
+                        print("elseeeeeeeee1")
+                        avg = (sentimental.sentiment_threshold + 1) / 2
+                        sentimental.sentiment_threshold = avg
+                        print("SAVE")
+                        sentimental.save()
 
-                    features_positive = [(extract_features(movie_reviews.words(fileids=[f])), 'Positive')
-                                         for f in positive_fileids]
-                    # print("POSITIVE", features_positive)
-                    features_negative = [(extract_features(movie_reviews.words(fileids=[f])), 'Negative')
-                                         for f in negative_fileids]
-                    threshold_factor = 0.8
-                    # print("lelen", features_positive)
-                    threshold_positive = int(threshold_factor * len(features_positive))
-                    threshold_negative = int(threshold_factor * len(features_negative))
-                    features_train = features_positive[:threshold_positive] + features_negative[:threshold_negative]
-                    features_test = features_positive[threshold_positive:] + features_negative[threshold_negative:]
-
-                    classifier = NaiveBayesClassifier.train(features_train)
-                    # print("CLASSIDFOE", list(classifier))
-
-                    # for f in review_text.split():
-                    #     print("SPLIT", classifier.prob_classify(extract_features(f)))
-                    probdist = classifier.prob_classify(extract_features(review_text.split()))
-                    # print("IIII", probdist)
-                    pred_sentiment = probdist.max()
-                    # print("MAX", pred_sentiment)
-
-                    user = UserThreshold.objects.filter(reviewer_id=user_id)
-                    print("SSSS", user)
-                    if not user:
-                        # print("hello")
-                        if pred_sentiment == "Positive":
-                            print("hello3")
-                            user = UserThreshold.objects.create(reviewer_id=user_id, reviewer_name=user_name, sentiment_threshold=1)
-                            print("hello4")
-                            user.save()
-                            print("hello5")
-                        else:
-                            user = UserThreshold.objects.create(reviewer_id=user_id, reviewer_name=user_name, sentiment_threshold=0)
-                            user.save()
                     else:
-                        print("elseeeeeeeee")
-                        sentimental = UserThreshold.objects.filter(reviewer_id=user_id).last()
-                        print("hello1",sentimental)
-                        if pred_sentiment == "Positive":
-                            print("elseeeeeeeee1")
-                            avg = (sentimental.sentiment_threshold + 1)/2
-                            sentimental.sentiment_threshold = avg
-                            print("SAVE")
-                            sentimental.save()
-                        else:
-                            print("elseeeeeeeee2")
-                            avg = sentimental.sentiment_threshold / 2
-                            sentimental.sentiment_threshold = avg
-                            print("B$ SAVE")
-                            sentimental.save()
+                        print("elseeeeeeeee2")
+                        avg = sentimental.sentiment_threshold / 2
+                        sentimental.sentiment_threshold = avg
+                        print("B$ SAVE")
+                        sentimental.save()
+
+                    print ("count..........")
+
+                    if (0.4 <= avg <= 0.7):
+                        count += 1
+                        print ("count")
+                        after_spam = UserProductReviewAfterSpam.objects.create(product_id=product_id,
+
+                                                                               reviewer_id=user_id,
+                                                                               reviewer_name=user_name,
+                                                                               review_text=review,
+                                                                               overall_rating=overall_rating,
+                                                                               summary_product=summary_product,
+                                                                               timestamp_review=timestamp,
+                                                                               date_review=date_review)
+                        after_spam.save()
+                    else:
+                        continue
+                else:
+                    print ("continue")
+                    continue
+            # print("lala")
+            # print(count)
+            for row, value in df.iterrows():
+                # print (value)
+                if count == 0:
+                    # print ("last")
+                    after_spam = UserProductReviewAfterSpam.objects.create(
+                        product_id=value.asin,
+                        reviewer_id=value.reviewerID,
+                        product_name="renault",
+                        reviewer_name=value.reviewerName,
+                        review_text=value.reviewText,
+                        overall_rating=value.overall,
+                        summary_product=value.summary,
+                        timestamp_review=value.unixReviewTime,
+                        date_review="2019-05-09")
+                    print(after_spam)
+                    print("final")
+                    after_spam.save()
+                    # print("save")
 
 
+            return Response({"message":"success", "product_id":product_id})
 
-                    # lst_data = []
-                    # dct_data = {}
-                    # dct_data['reviewer_id'] = user_id
-                    # dct_data['reviewer_name'] = user_name
-                    # dct_data['review_text'] = review_text
-                    # dct_data['Predicted Sentiment'] = pred_sentiment
-                    # dct_data['Probability'] = round(probdist.prob(pred_sentiment), 2)
-                    # lst_data.append(dct_data)
-
-
-                    # return lst_data
-                    # return ("success")
-
-
-                # lst.extend(sentimental_output(review))
-                sentimental_output(review)
-            print("hello66")
-            return Response("success")
-
-
-
-
-
-            # df.columns = list(map(lambda x: x.strip().replace(' ', '_'), df.columns))
-            # df['waiver'] = df['waiver'].astype(float)
-            # df['waiver'] = df['waiver'].fillna(0)
-            # df = df.fillna('')
-            # df[['container_number', 'lease_yard']] = df[['container_number', 'lease_yard']].astype(str)
-            # df['off_hire_date'] = pd.to_datetime(df['off_hire_date'])
-            # df[['container_number', 'lease_yard']] = df[['container_number', 'lease_yard']].apply(
-            #     lambda x: x.str.strip().str.upper())
-            # lst_data = []
-            # for row, value in df.iterrows():
-            #     dct_data = {}
-            #     try:
-            #         container = Container.objects.get(number__iexact=value.container_number)
-            #     except:
-            #         continue
-            #     dct_data['container_number_id'] = container.id
-            #     dct_data['container_number'] = container.number
-            #     dct_data['container_type_id'] = container.container_type.id
-            #     dct_data['container_type'] = container.container_type.name
-            #     dct_data['line_id'] = container.line.id if container.line else None
-            #     dct_data['line'] = container.line.code if container.line else ''
-            #     dct_data['location_id'] = container.move_history.last().location.id if container.move_history else None
-            #     dct_data['location'] = container.move_history.last().location.code if container.move_history else ''
-            #     dct_data['off_hire_date'] = value.off_hire_date
-            #     try:
-            #         yard = Yard.objects.get(code__iexact=value.lease_yard)
-            #     except:
-            #         continue
-            #     dct_data['yard_id'] = yard.pk
-            #     dct_data['yard'] = value.lease_yard
-            #     dct_data['waiver'] = value.waiver
-            #     lst_data.append(dct_data)
         except:
             return Response(['Please upload proper file'])
+        # except Exception as err:
+        #     return None
         else:
             return Response("success")
+
+
