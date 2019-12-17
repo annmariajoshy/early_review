@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import (UserProductReviewAfterSpam, AuthUser, JsonFileUpload)
+from .models import (UserProductReviewAfterSpam, AuthUser, JsonFileUpload,  UserProductReviewBeforeSpam)
 
 
 class DynamicFieldsModelSerializer(serializers.ModelSerializer):
@@ -60,3 +60,11 @@ class JsonFileUploadSerializer(DynamicFieldsModelSerializer):
     class Meta:
         model = JsonFileUpload
         fields = [f.name for f in model._meta.fields]
+
+
+class UserProductReviewBeforeSpamSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model =  UserProductReviewBeforeSpam
+        # fields = [f.name for f in model._meta.fields]
+        fields = '__all__'

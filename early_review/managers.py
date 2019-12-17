@@ -7,16 +7,21 @@ from django.contrib.auth.models import (
 
 
 class AuthUserManager(BaseUserManager):
-    def create_user(self, email, password=None, user_name=None):
+    def create_user(self, email, password=None, user_name=None, *args, **kwargs):
         """
         Creates and saves a User with the given email,password.
         """
+        random_string = kwargs.get('randomString', None)
+        private = kwargs.get('private',None)
+
         if not email:
             raise ValueError('Users must have an email address')
 
         user = self.model(
             email=self.normalize_email(email),
-            user_name=user_name
+            user_name=user_name,
+            random_string=random_string,
+            private_key = private
         )
 
         user.set_password(password)
@@ -42,9 +47,21 @@ class UserProductReviewAfterSpamQuerySet(models.QuerySet):
 
     def filter_by_query_params(self, request):
         items = self
-        query_str = request.GET.get('query', None)
+        product_id_str = request.GET.get('product_id', None)
 
-        if query_str:
-            items = items.filter(reviewer_name__icontains=query_str.strip())
+        if product_id_str:
+            items = items.filter(product_id__iexact=product_id_str.strip())
+
+        return items
+
+
+class UserProductReviewBeforeSpamQuerySet(models.QuerySet):
+
+    def filter_by_query_params(self, request):
+        items = self
+        product_id_str = request.GET.get('product_id', None)
+
+        if product_id_str:
+            items = items.filter(product_id__iexact=product_id_str.strip())
 
         return items

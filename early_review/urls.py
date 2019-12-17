@@ -1,10 +1,10 @@
+from django.conf import settings
 from django.conf.urls import url, include
 from django.conf.urls.static import static
 from rest_framework import routers
-from early_review.views import UserProductReviewAfterSpamViewSet, AuthUserViewSet, AuthUserModelViewSet, \
-    FileUploadViewSet
-from early_review_backend import settings
-from . import views
+from .views import UserProductReviewAfterSpamViewSet, AuthUserViewSet, AuthUserModelViewSet, FileUploadViewSet, \
+    UserProductReviewBeforeSpamViewSet
+
 
 router = routers.SimpleRouter()
 router.register('user-product-early', UserProductReviewAfterSpamViewSet,
@@ -14,6 +14,7 @@ router.register('registration', AuthUserViewSet,
 router.register('users', AuthUserModelViewSet,
                 base_name='users')
 router.register('file-upload', FileUploadViewSet, base_name='file-upload')
+router.register('user-product-before-spam', UserProductReviewBeforeSpamViewSet, base_name='user-product-before-spam')
 
 urlpatterns = [
     url(r'^api/', include(router.urls)),

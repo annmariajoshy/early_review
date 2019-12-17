@@ -1,25 +1,112 @@
 import datetime
-
+import random
+import string
+# import sys
+# sys.path
+# import elgamal
+from Crypto.Hash import SHA256
+from Crypto.PublicKey import RSA
 from django.contrib.auth import authenticate
 from django.db import transaction
 from rest_framework import viewsets, status
 from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 
-from .serializers import (UserProductReviewAfterSpamSerializer, AuthUserSerializer, JsonFileUploadSerializer)
-from .models import (UserProductReviewAfterSpam, AuthUser, JsonFileUpload,UserThreshold)
+from .serializers import (UserProductReviewAfterSpamSerializer, AuthUserSerializer, JsonFileUploadSerializer,
+                          UserProductReviewBeforeSpamSerializer)
+from .models import (UserProductReviewAfterSpam, AuthUser, JsonFileUpload,UserThreshold,  UserProductReviewBeforeSpam)
 from rest_framework.decorators import detail_route, list_route, action
 
 import nltk.classify.util
 from nltk.classify import NaiveBayesClassifier
 from nltk.corpus import movie_reviews
-import nltk
+# from nltk.corpus import product_reviews_2
+# import nltk
 import pandas as pd
 
+import smtplib, ssl
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
 # nltk.download('movie_reviews')
+# nltk.download(' product_reviews_1')
+# nltk.download('product_reviews_1')
 
 
-class UserProductReviewAfterSpamViewSet(viewsets.ModelViewSet):
+class FullListAPI:
+    """
+    ?required_fields='id,code'
+    """
+    @list_route(methods=['GET'])
+    def full_list(self, request):
+        self.pagination_class = None
+        fields = request.GET.get('fields')
+        model = self.queryset.model
+        try:
+            select_related = self.select_related_fields
+        except:
+            select_related = ()
+        try:
+            prefetch_related = self.prefetch_related_fields
+        except:
+            prefetch_related = ()
+        try:
+            static_filters = self.static_filters
+        except:
+            static_filters = {}
+        queryset = model.objects.select_related(
+            *select_related).prefetch_related(
+            *prefetch_related).filter_by_query_params(request)
+        queryset = self.filter_queryset(queryset)
+        if static_filters:
+            queryset = queryset.filter(**static_filters)
+
+        if fields:
+            fields = tuple(f.strip() for f in fields.split(','))
+            slz = self.serializer_class(queryset, many=True, fields=fields, context={'request': request})
+        else:
+            slz = self.serializer_class(queryset, many=True, context={'request': request})
+        return Response(slz.data)
+
+    @transaction.atomic
+    @list_route(methods=['POST'])
+    def bulk_upsert(self, request):
+        """
+        Insert or create multiple data at once
+        """
+        # TODO: check whether audit log is working or not
+        if type(request.data) != list:
+            raise Exception("Expected list for the bulk upsert")
+
+        success_data = {
+            'total_count': 0,
+            'updated': 0,
+            'inserted': 0
+        }
+        for item in request.data:
+            id_ = item.get('id', None)
+            if not id_:
+                serializer = self.get_serializer(data=item)
+                serializer.is_valid(raise_exception=True)
+                self.perform_create(serializer)
+                success_data['inserted'] += 1
+            if id_:
+                partial = True
+                pk = int(id_)
+                lookup_url_kwarg = self.lookup_url_kwarg or self.lookup_field
+                if pk:
+                    self.kwargs['pk'] = pk
+                instance = self.get_object()
+                serializer = self.get_serializer(instance, data=item, partial=partial)
+                serializer.is_valid(raise_exception=True)
+                self.perform_update(serializer)
+                success_data['updated'] += 1
+
+        success_data['total_count'] = success_data['updated'] + success_data['inserted']
+        return Response(success_data, status=status.HTTP_201_CREATED)
+
+
+class UserProductReviewAfterSpamViewSet(viewsets.ModelViewSet, FullListAPI):
     queryset = UserProductReviewAfterSpam.objects.all()
     serializer_class = UserProductReviewAfterSpamSerializer
 
@@ -40,7 +127,7 @@ class UserProductReviewAfterSpamViewSet(viewsets.ModelViewSet):
             last_date = product_review.order_by('date_review').last().date_review
             difference = (last_date - first_date) / 3
             second_date = first_date + datetime.timedelta(days=difference.days)
-            output_data = UserProductReviewAfterSpam.objects.filter(date_review__gte=first_date,
+            output_data = product_review.filter(date_review__gte=first_date,
                                                                     date_review__lte=second_date)
         except UserProductReviewAfterSpam.DoesNotExist:
             return Response(['Please send valid new product_id.'])
@@ -77,8 +164,7 @@ class UserProductReviewAfterSpamViewSet(viewsets.ModelViewSet):
             difference = (last_date - first_date) / 3
             second_date = first_date + datetime.timedelta(days=difference.days)
             third_date = second_date + datetime.timedelta(days=difference.days)
-            print(second_date, third_date)
-            output_data = UserProductReviewAfterSpam.objects.filter(date_review__gt=second_date,
+            output_data = product_review.filter(date_review__gt=second_date,
                                                                     date_review__lte=third_date)
         except UserProductReviewAfterSpam.DoesNotExist:
             return Response(['Please send valid new product_id.'])
@@ -102,6 +188,7 @@ class UserProductReviewAfterSpamViewSet(viewsets.ModelViewSet):
         middle_count=len(output_data)
         data = {'rating_avg': rating_avg,'middle_count':middle_count, 'data': lst_data}
 
+
         return Response(data)
 
     @list_route()
@@ -117,8 +204,7 @@ class UserProductReviewAfterSpamViewSet(viewsets.ModelViewSet):
             second_date = first_date + datetime.timedelta(days=difference.days)
             third_date = second_date + datetime.timedelta(days=difference.days)
             fourth_date = third_date + datetime.timedelta(days=difference.days)
-            print(third_date, fourth_date)
-            output_data = UserProductReviewAfterSpam.objects.filter(date_review__gt=third_date,
+            output_data = product_review.filter(date_review__gt=third_date,
                                                                     date_review__lte=fourth_date)
         except UserProductReviewAfterSpam.DoesNotExist:
             return Response(['Please send valid new product_id.'])
@@ -146,6 +232,8 @@ class UserProductReviewAfterSpamViewSet(viewsets.ModelViewSet):
 
     @list_route()
     def sentimental_analysis(self, request):
+        pos=0
+        neg=0
         product_id = request.GET.get('product_id', None)
         if not product_id:
             return Response(['Please Send product_id as query string.'])
@@ -155,7 +243,7 @@ class UserProductReviewAfterSpamViewSet(viewsets.ModelViewSet):
             last_date = product_review.order_by('date_review').last().date_review
             difference = (last_date - first_date) / 3
             second_date = first_date + datetime.timedelta(days=difference.days)
-            output_data = UserProductReviewAfterSpam.objects.filter(date_review__gte=first_date,
+            output_data = product_review.filter(date_review__gte=first_date,
                                                                     date_review__lte=second_date)
         except UserProductReviewAfterSpam.DoesNotExist:
             return Response(['Please send valid new product_id.'])
@@ -163,72 +251,96 @@ class UserProductReviewAfterSpamViewSet(viewsets.ModelViewSet):
         def extract_features(word_list):
             return dict([(word, True) for word in word_list])
 
-        def sentimental_output(review_text):
-            print("POSITIVE", review_text)
-            print("MOVIE-REVIEWS", movie_reviews.fileids('pos')[0][0])
-            # print("PPPPATH",os.path(movie_reviews.fileids('pos')[0]))
-            positive_fileids = movie_reviews.fileids('pos')
-            # print("POSITIVE>>>", positive_fileids)
-            negative_fileids = movie_reviews.fileids('neg')
-            # print("negative>>>", negative_fileids)
-            features_positive = [(extract_features(movie_reviews.words(fileids=[f])), 'Positive') for f in
-                                 positive_fileids]
-            features_negative = [(extract_features(movie_reviews.words(fileids=[f])), 'Negative') for f in
-                                 negative_fileids]
-            threshold_factor = 0.8
-            threshold_positive = int(threshold_factor * len(features_positive))
-            threshold_negative = int(threshold_factor * len(features_negative))
-            features_train = features_positive[:threshold_positive] + features_negative[:threshold_negative]
-            features_test = features_positive[threshold_positive:] + features_negative[threshold_negative:]
-            # print("\nNumber of training datapoints:", len(features_train))
-            # print("Number of test datapoints:", len(features_test))
+        def sentimental_output(review_text, co, pos, neg):
+            # print("TXT", review_text.split('.'))
+            split_text = review_text.split('.')
+            if co == 1:
+                # print("if-COUNT", co)
+                positive_fileids = movie_reviews.fileids('pos')
+                negative_fileids = movie_reviews.fileids('neg')
+                features_positive = [(extract_features(movie_reviews.words(fileids=[f])), 'Positive') for f in
+                                     positive_fileids]
+                features_negative = [(extract_features(movie_reviews.words(fileids=[f])), 'Negative') for f in
+                                     negative_fileids]
+                threshold_factor = 0.8
+                threshold_positive = int(threshold_factor * len(features_positive))
+                threshold_negative = int(threshold_factor * len(features_negative))
+                features_train = features_positive[:threshold_positive] + features_negative[:threshold_negative]
+                features_test = features_positive[threshold_positive:] + features_negative[threshold_negative:]
 
-            classifier = NaiveBayesClassifier.train(features_train)
-            print("\nAccuracy of the classifier:", nltk.classify.util.accuracy(classifier, features_test))
+                self.classifier = NaiveBayesClassifier.train(features_train)
+            pred_sentiment_lst = []
+            pred_sentiment_sum = 0
+            for text in split_text:
 
-            # print("\nTop 10 most informative words:")
-            # for item in classifier.most_informative_features()[:10]:
-            #     print(item[0])
-
-            print("\nPredictions:")
-
-            print("\nReview:", review_text)
-            probdist = classifier.prob_classify(extract_features(review_text.split()))
-            pred_sentiment = probdist.max()
-
-            print("Predicted sentiment:", pred_sentiment)
-            print("Probability:", round(probdist.prob(pred_sentiment), 2))
+                probdist = self.classifier.prob_classify(extract_features(text.split()))
+            # print("PROB_DIST", vars(probdist))
+                pred_sentiment = probdist.max()
+                text_probability = round(probdist.prob(pred_sentiment), 2)
+                pred_sentiment_sum += text_probability
+                pred_sentiment_lst.append(pred_sentiment)
+            # print("SENTI", pred_sentiment)
+            positive_counter = 0
+            negative_counter = 0
+            print("LST", pred_sentiment_lst)
+            for i in range(0,len(pred_sentiment_lst)):
+                if pred_sentiment_lst[i] == 'Positive':
+                    positive_counter +=1
+                else:
+                    negative_counter +=1
+            print("counter", positive_counter)
             lst_data = []
             dct_data = {}
             dct_data['product_name'] = row.product_name
             dct_data['reviewer_name'] = row.reviewer_name
             dct_data['review_text'] = review_text
-            dct_data['predicted_sentiment'] = pred_sentiment
-            dct_data['Probability'] = round(probdist.prob(pred_sentiment), 2)
+            # dct_data['predicted_sentiment'] = pred_sentiment
+            dct_data['predicted_sentiment'] = "Positive" if positive_counter >= negative_counter else "Negative"
+
+            if dct_data['predicted_sentiment']=="Positive":
+                pos += 1
+
+            else:
+                neg += 1
+            # dct_data['Probability'] = round(probdist.prob(pred_sentiment), 2)
+            dct_data['Probability'] = round(pred_sentiment_sum/len(pred_sentiment_lst), 2)
             lst_data.append(dct_data)
-            return lst_data
+
+            return [lst_data,pos,neg]
 
         lst = []
+        rtn = []
+        tot_pos = 0
+        tot_neg = 0
+        co = 0
         for row in output_data:
-            lst.extend(sentimental_output(row.review_text))
-
-        return Response(lst)
+            co += 1
+            # print("USER", row.reviewer_name)
+            rtn = sentimental_output(row.review_text, co, pos, neg)
+            lst.extend(rtn[0])
+            tot_pos += rtn[1]
+            tot_neg += rtn[2]
+        data = {'pos_count': tot_pos, 'neg_count': tot_neg, 'data': lst}
+        return Response(data)
 
 
 class AuthUserViewSet(viewsets.ViewSet):
 
     @action(methods=['POST'], detail=False)
     def login(self, request):
+        print('login',request.data)
 
-        email_str = request.data.get('email', None)
+        email= request.data.get('email', None)
         password_str = request.data.get('password', None)
 
-        email = email_str.strip()
+        email = email.strip()
         password = password_str.strip()
+        print('rans]dom',email)
 
         if email and password:
 
             user = authenticate(email=email, password=password)
+            print('user',user)
             if not user:
                 return Response({'error': 'user not found'}, status=status.HTTP_404_NOT_FOUND)
             else:
@@ -239,30 +351,60 @@ class AuthUserViewSet(viewsets.ViewSet):
 
     @action(methods=['POST'], detail=False)
     def register(self, request):
-
+        print('request',request.data);
         email_str = request.data.get('email', None)
-        password_str = request.data.get('password', None)
+        #password_str = request.data.get('password', None)
         user_name_str = request.data.get('username', None)
 
         email = email_str.strip()
-        password = password_str.strip()
+        #password = password_str.strip()
         user_name = user_name_str.strip()
 
-        if email and password and user_name:
+        # if email and password and user_name:
+        if email and user_name:
             try:
                 user = AuthUser.objects.get_by_natural_key(email)
                 return Response({'error': 'user already exist'}, status=status.HTTP_400_BAD_REQUEST)
 
             except AuthUser.DoesNotExist:
-                app_user = AuthUser.objects.create_user(email, password, user_name)
+                lettersAndDigits = user_name + string.digits
+                randomString = ''.join(random.choice(lettersAndDigits) for i in range(6))
+                print('random string',randomString)
+                password_characters = string.ascii_letters + string.digits + string.punctuation
+                password = ''.join(random.choice(password_characters) for i in range(5))
+                print('password',password)
+                key = RSA.generate(2048)
+                public = key.publickey().exportKey('PEM').decode('ascii')
+                private = key.exportKey('PEM').decode('ascii')
+                print('key', key)
+                print('public key', public)
+                print('private key', private)
+                app_user = AuthUser.objects.create_user(email, password, user_name, randomString=randomString,private=private)
                 token = Token.objects.get_or_create(user=app_user)
+                trying_email(user_name,randomString,password,email)
                 return Response({'token': str(token[0]),'message': 'registered successfully'}, status=status.HTTP_200_OK)
 
         else:
             return Response({'error': 'provide email and password'}, status=status.HTTP_400_BAD_REQUEST)
 
+    @action(methods=['POST'], detail=False)
+    def changePassword(self, request):
+        print('password',request.data)
 
-class AuthUserModelViewSet(viewsets.ModelViewSet):
+        old_password = request.data.get('old_password', None)
+        new_password = request.data.get('new_password', None)
+
+        # old_password = old_password.strip()
+        # new_password = new_password.strip()
+
+        if old_password and new_password:
+            user = authenticate(password=old_password)
+            if not user:
+                print('pswd not changd')
+            else:
+                print('pswd changed')
+
+class AuthUserModelViewSet(viewsets.ModelViewSet, FullListAPI):
     queryset = AuthUser.objects.all()
     serializer_class = AuthUserSerializer
 
@@ -274,260 +416,92 @@ class AuthUserModelViewSet(viewsets.ModelViewSet):
         return super(AuthUserModelViewSet, self).list(request)
 
 
-# class FileUploadViewSet(viewsets.ModelViewSet):
-#     serializer_class = JsonFileUploadSerializer
-#     queryset = JsonFileUpload.objects.all()
-#
-#     # def list(self, request):
-#     #     return Response("list")
-#     @transaction.atomic
-#     def create(self, request):
-#         try:
-#             df = pd.read_json(request.data['file_upload'], lines=True)
-#             lst = []
-#             for row, value in df.iterrows():
-#                 user_id = value.reviewerID
-#                 user_name = value.reviewerName
-#                 review = value.reviewText
-#
-#                 # product_id = request.GET.get('product_id', None)
-#                 # if not product_id:
-#                 #     return Response(['Please Send product_id as query string.'])
-#                 # try:
-#                 #     product_review = UserProductReviewAfterSpam.objects.filter(product_id=product_id)
-#                 #     first_date = product_review.order_by('date_review').first().date_review
-#                 #     last_date = product_review.order_by('date_review').last().date_review
-#                 #     difference = (last_date - first_date) / 3
-#                 #     second_date = first_date + datetime.timedelta(days=difference.days)
-#                 #     output_data = UserProductReviewAfterSpam.objects.filter(date_review__gte=first_date,
-#                 #                                                             date_review__lte=second_date)
-#                 # except UserProductReviewAfterSpam.DoesNotExist:
-#                 #     return Response(['Please send valid new product_id.'])
-#
-#                 def extract_features(word_list):
-#                     return dict([(word, True) for word in word_list])
-#
-#                 def sentimental_output(review_text):
-#                     positive_fileids = movie_reviews.fileids('pos')
-#                     negative_fileids = movie_reviews.fileids('neg')
-#                     # for f in positive_fileids:
-#                     #     # print(">>>>>", f)
-#                     #     print(extract_features(movie_reviews.words(fileids=[f])))
-#
-#                     features_positive = [(extract_features(movie_reviews.words(fileids=[f])), 'Positive')
-#                                          for f in positive_fileids]
-#                     # print("POSITIVE", features_positive)
-#                     features_negative = [(extract_features(movie_reviews.words(fileids=[f])), 'Negative')
-#                                          for f in negative_fileids]
-#                     threshold_factor = 0.8
-#                     # print("lelen", features_positive)
-#                     threshold_positive = int(threshold_factor * len(features_positive))
-#                     threshold_negative = int(threshold_factor * len(features_negative))
-#                     features_train = features_positive[:threshold_positive] + features_negative[:threshold_negative]
-#                     features_test = features_positive[threshold_positive:] + features_negative[threshold_negative:]
-#
-#                     classifier = NaiveBayesClassifier.train(features_train)
-#                     # print("CLASSIDFOE", list(classifier))
-#
-#                     # for f in review_text.split():
-#                     #     print("SPLIT", classifier.prob_classify(extract_features(f)))
-#                     probdist = classifier.prob_classify(extract_features(review_text.split()))
-#                     # print("IIII", probdist)
-#                     pred_sentiment = probdist.max()
-#                     # print("MAX", pred_sentiment)
-#
-#                     user = UserThreshold.objects.filter(reviewer_id=user_id)
-#                     print("SSSS", user)
-#                     if not user:
-#                         # print("hello")
-#                         if pred_sentiment == "Positive":
-#                             print("hello3")
-#                             user = UserThreshold.objects.create(reviewer_id=user_id, reviewer_name=user_name, sentiment_threshold=1)
-#                             print("hello4")
-#                             user.save()
-#                             print("hello5")
-#                         else:
-#                             user = UserThreshold.objects.create(reviewer_id=user_id, reviewer_name=user_name, sentiment_threshold=0)
-#                             user.save()
-#                     else:
-#                         print("elseeeeeeeee")
-#                         sentimental = UserThreshold.objects.filter(reviewer_id=user_id).last()
-#                         print("hello1",sentimental)
-#                         if pred_sentiment == "Positive":
-#                             print("elseeeeeeeee1")
-#                             avg = (sentimental.sentiment_threshold + 1)/2
-#                             sentimental.sentiment_threshold = avg
-#                             print("SAVE")
-#                             sentimental.save()
-#                         else:
-#                             print("elseeeeeeeee2")
-#                             avg = sentimental.sentiment_threshold / 2
-#                             sentimental.sentiment_threshold = avg
-#                             print("B$ SAVE")
-#                             sentimental.save()
-#
-#
-#
-#                     # lst_data = []
-#                     # dct_data = {}
-#                     # dct_data['reviewer_id'] = user_id
-#                     # dct_data['reviewer_name'] = user_name
-#                     # dct_data['review_text'] = review_text
-#                     # dct_data['Predicted Sentiment'] = pred_sentiment
-#                     # dct_data['Probability'] = round(probdist.prob(pred_sentiment), 2)
-#                     # lst_data.append(dct_data)
-#
-#
-#                     # return lst_data
-#                     # return ("success")
-#
-#
-#                 # lst.extend(sentimental_output(review))
-#                 sentimental_output(review)
-#             print("hello66")
-#             return Response("success")
-#
-#
-#
-#
-#
-#             # df.columns = list(map(lambda x: x.strip().replace(' ', '_'), df.columns))
-#             # df['waiver'] = df['waiver'].astype(float)
-#             # df['waiver'] = df['waiver'].fillna(0)
-#             # df = df.fillna('')
-#             # df[['container_number', 'lease_yard']] = df[['container_number', 'lease_yard']].astype(str)
-#             # df['off_hire_date'] = pd.to_datetime(df['off_hire_date'])
-#             # df[['container_number', 'lease_yard']] = df[['container_number', 'lease_yard']].apply(
-#             #     lambda x: x.str.strip().str.upper())
-#             # lst_data = []
-#             # for row, value in df.iterrows():
-#             #     dct_data = {}
-#             #     try:
-#             #         container = Container.objects.get(number__iexact=value.container_number)
-#             #     except:
-#             #         continue
-#             #     dct_data['container_number_id'] = container.id
-#             #     dct_data['container_number'] = container.number
-#             #     dct_data['container_type_id'] = container.container_type.id
-#             #     dct_data['container_type'] = container.container_type.name
-#             #     dct_data['line_id'] = container.line.id if container.line else None
-#             #     dct_data['line'] = container.line.code if container.line else ''
-#             #     dct_data['location_id'] = container.move_history.last().location.id if container.move_history else None
-#             #     dct_data['location'] = container.move_history.last().location.code if container.move_history else ''
-#             #     dct_data['off_hire_date'] = value.off_hire_date
-#             #     try:
-#             #         yard = Yard.objects.get(code__iexact=value.lease_yard)
-#             #     except:
-#             #         continue
-#             #     dct_data['yard_id'] = yard.pk
-#             #     dct_data['yard'] = value.lease_yard
-#             #     dct_data['waiver'] = value.waiver
-#             #     lst_data.append(dct_data)
-#         except:
-#             return Response(['Please upload proper file'])
-#         else:
-#             return Response("success")
+class FileUploadViewSet(viewsets.ModelViewSet, FullListAPI):
+    # serializer_class = JsonFileUploadSerializer
+    # queryset = JsonFileUpload.objects.all()
 
-
-class FileUploadViewSet(viewsets.ModelViewSet):
-    serializer_class = JsonFileUploadSerializer
-    queryset = JsonFileUpload.objects.all()
-
-    # def list(self, request):
-    #     return Response("list")
     @transaction.atomic
     def create(self, request):
         def extract_features(word_list):
             return dict([(word, True) for word in word_list])
 
-        def sentimental_output(review_text):
-            print ("start")
+        def sentimental_output():
             positive_fileids = movie_reviews.fileids('pos')
             negative_fileids = movie_reviews.fileids('neg')
-            # for f in positive_fileids:
-            #     # print(">>>>>", f)
-            #     print(extract_features(movie_reviews.words(fileids=[f])))
 
             features_positive = [(extract_features(movie_reviews.words(fileids=[f])), 'Positive')
                                  for f in positive_fileids]
-            # print("POSITIVE", features_positive)
             features_negative = [(extract_features(movie_reviews.words(fileids=[f])), 'Negative')
                                  for f in negative_fileids]
             threshold_factor = 0.8
-            # print("lelen", features_positive)
+
             threshold_positive = int(threshold_factor * len(features_positive))
             threshold_negative = int(threshold_factor * len(features_negative))
             features_train = features_positive[:threshold_positive] + features_negative[:threshold_negative]
             features_test = features_positive[threshold_positive:] + features_negative[threshold_negative:]
 
-            classifier = NaiveBayesClassifier.train(features_train)
-            # print("CLASSIDFOE", list(classifier))
+            self.classifier = NaiveBayesClassifier.train(features_train)
 
-            # for f in review_text.split():
-            #     print("SPLIT", classifiafter_spamer.prob_classify(extract_features(f)))
-            probdist = classifier.prob_classify(extract_features(review_text.split()))
-            print("IIII", probdist)
+        # @staticmethod
+        def sentimental_probdist(review_text):
+            probdist = self.classifier.prob_classify(extract_features(review_text.split()))
+            # print("prob_dist>>>>", probdist)
+
             pred_sentiment = probdist.max()
-            print("MAX", pred_sentiment)
-            return  pred_sentiment
+
+            return pred_sentiment
 
         try:
             df = pd.read_json(request.data['file_upload'], lines=True)
-            lst = []
+            sentimental_output()
+            # if :
+            #     pass
+            # else:
+            #     return Response(['Sorry! This product has already been analysed'])
             count = 0
-            print("enter")
             for row, value in df.iterrows():
-                print("uploaded")
+
                 user_id = value.reviewerID
-                print ("1")
                 user_name = value.reviewerName
-                print ("2")
                 review = value.reviewText
-                print ("3")
                 product_id = value.asin
-                print ("4")
-                # product_name = value.productName
-                print ("5")
+                product_name = value.productName
                 overall_rating = value.overall
-                print ("6")
                 summary_product = value.summary
-                print ("7")
                 timestamp = value.unixReviewTime
-                print ("8")
                 date_review = value.reviewTime
-                print ("9")
-
-
-
+                before_spam = UserProductReviewBeforeSpam.objects.create(product_id=value.asin,
+                                                                       reviewer_id=value.reviewerID,
+                                                                       product_name=value.productName,
+                                                                       reviewer_name=value.reviewerName,
+                                                                       review_text=value.reviewText,
+                                                                       overall_rating=value.overall,
+                                                                       summary_product=value.summary,
+                                                                       timestamp_review=value.unixReviewTime,
+                                                                       date_review=value.reviewTime)
+                before_spam.save()
                 user = UserThreshold.objects.filter(reviewer_id=user_id)
-                print("SSSS", user)
                 if user:
-                    print("sentimental")
-                    output=sentimental_output(review)
-                    print ("output", output)
+                    # print(user_name, output, avg)
+                    # co += 1
+                    output = sentimental_probdist(review)
+                    # print("sentiment",output);
                     sentimental = UserThreshold.objects.filter(reviewer_id=user_id).last()
-                    print("hello1", sentimental)
+
                     if output == "Positive":
-                        print("elseeeeeeeee1")
                         avg = (sentimental.sentiment_threshold + 1) / 2
                         sentimental.sentiment_threshold = avg
-                        print("SAVE")
                         sentimental.save()
 
                     else:
-                        print("elseeeeeeeee2")
                         avg = sentimental.sentiment_threshold / 2
                         sentimental.sentiment_threshold = avg
-                        print("B$ SAVE")
                         sentimental.save()
-
-                    print ("count..........")
-
+                    print(user_name, output, avg)
                     if (0.4 <= avg <= 0.7):
                         count += 1
-                        print ("count")
                         after_spam = UserProductReviewAfterSpam.objects.create(product_id=product_id,
-
+                                                                               product_name=product_name,
                                                                                reviewer_id=user_id,
                                                                                reviewer_name=user_name,
                                                                                review_text=review,
@@ -537,39 +511,101 @@ class FileUploadViewSet(viewsets.ModelViewSet):
                                                                                date_review=date_review)
                         after_spam.save()
                     else:
+                        # print("hello")
+                        # print(user_name,output,avg)
                         continue
                 else:
-                    print ("continue")
                     continue
-            # print("lala")
-            # print(count)
-            for row, value in df.iterrows():
-                # print (value)
-                if count == 0:
-                    # print ("last")
-                    after_spam = UserProductReviewAfterSpam.objects.create(
-                        product_id=value.asin,
-                        reviewer_id=value.reviewerID,
-                        product_name="renault",
-                        reviewer_name=value.reviewerName,
-                        review_text=value.reviewText,
-                        overall_rating=value.overall,
-                        summary_product=value.summary,
-                        timestamp_review=value.unixReviewTime,
-                        date_review="2019-05-09")
-                    print(after_spam)
-                    print("final")
+            if count < 2 :
+                for row, value in df.iterrows():
+                    after_spam = UserProductReviewAfterSpam.objects.create(product_id=value.asin,
+                                                                           reviewer_id=value.reviewerID,
+                                                                           product_name=value.productName,
+                                                                           reviewer_name=value.reviewerName,
+                                                                           review_text=value.reviewText,
+                                                                           overall_rating=value.overall,
+                                                                           summary_product=value.summary,
+                                                                           timestamp_review=value.unixReviewTime,
+                                                                           date_review=value.reviewTime)
                     after_spam.save()
-                    # print("save")
+                    user = UserThreshold.objects.filter(reviewer_id=value.reviewerID)
+                    if not user:
+                        # output = sentimental_output(value.reviewText)
+                        output = sentimental_probdist(value.reviewText)
+                        # sentimental = UserThreshold.objects.filter(reviewer_id=user_id).last()
+                        if output == "Positive":
+                            user = UserThreshold.objects.create(reviewer_id=value.reviewerID, reviewer_name=value.reviewerName,
+                                                            sentiment_threshold=1)
+                            user.save()
 
+                        else:
+                            user = UserThreshold.objects.create(reviewer_id=value.reviewerID,
+                                                            reviewer_name=value.reviewerName,
+                                                            sentiment_threshold=0)
+                            user.save()
+                    else:
+                        continue
 
-            return Response({"message":"success", "product_id":product_id})
+            return Response({"message": "success", "product_id": product_id})
 
-        except:
-            return Response(['Please upload proper file'])
         # except Exception as err:
-        #     return None
-        else:
-            return Response("success")
+            # return Response('error: {}'.format(str(err)))
+        except Exception as err:
+            return Response(['Please upload proper file', str(err)])
+
+
+class UserProductReviewBeforeSpamViewSet(viewsets.ModelViewSet, FullListAPI):
+    queryset = UserProductReviewBeforeSpam.objects.all()
+    serializer_class = UserProductReviewBeforeSpamSerializer
+
+    # filter_fields = ['product_id']
+
+    def list(self, request):
+        self.queryset = self.queryset.filter_by_query_params(request)
+        return super(UserProductReviewBeforeSpamViewSet, self).list(request)
+
+#
+def trying_email(usr_name,user,pswd,email):
+    sender = 'annmariajoshy77@gmail.com'
+    password = 'godmystrength111'
+    receivers = email
+    print('maillllll')
+    message = MIMEMultipart("alternative")
+    message["Subject"] = "Username & Password"
+    message["From"] = sender
+    message["To"] = receivers
+    context = ssl.create_default_context()
+    text = "Hi {},\n \n Please find the login details \n Username: {}\n Password: {}\n".format(usr_name, email, pswd)
+
+    part1 = MIMEText(text, "plain")
+    message.attach(part1)
+    print('text')
+    try:
+        print('tttttt')
+        smtpObj = smtplib.SMTP("smtp.gmail.com",587)
+        smtpObj.starttls(context=context)  # Secure the connection
+        smtpObj.login(sender, password)
+        smtpObj.sendmail(sender, receivers, message.as_string())
+        print("Successfully sent from:-->{}\n email to--->{}".format(sender, receivers))
+    except smtplib.SMTPException as err:
+        print(str(err))
+
+# def trying_email(usr_name,user,pswd,email):
+#     sender = 'annmariajoshy77@gmail.com'
+#     password = 'godmystrength111'
+#     receivers = email
+#     print('maillllll')
+#     # message = MIMEMultipart("alternative")
+#     # message["Subject"] = "Username & Password"
+#     # message["From"] = sender
+#     # message["To"] = receivers
+#     context = ssl.create_default_context()
+#     server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
+#     server.login("annmariajoshy77@gmail.com", "godmystrength111")
+#     server.sendmail(
+#         "annmariajoshy77@gmail.com",
+#         "{}".format(receivers),
+#         "Hi {},\n \n Please find the login details \n Email: {}\n Password: {}\n".format(usr_name,email, pswd))
+#     server.quit()
 
 
